@@ -1,0 +1,37 @@
+name: Deploy to Kubernetes
+
+on:
+  workflow_run:
+    workflows: ["Build and Push to GHCR"] # Name of your CI workflow
+    types: [completed]
+    branches: [main]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Kubectl
+        uses: azure/setup-kubectl@v4ß
+        with:
+          version: 'latest'
+
+      - name: Set Kubernetes Context
+        uses: azure/k8s-set-context@v4
+        with:
+          method: kubeconfig
+          kubeconfig: ${{ secrets.KUBE_CONFIG }}
+
+      - name: Deploy to Kubernetes
+        run: |
+          # Optionally update the image tag dynamically
+          kubectl set image deployment/my-app my-app=ghcr.io/${{ github.repository }}:${{ github.sha }} --record || \
+          kubectl apply -f k8s/deployment.yaml
+
+      - name: Verify Deployment Rollout
+        run: |
+          kubectl rollout status deployment/my-app --timeout=120s
